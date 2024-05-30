@@ -61,3 +61,8 @@ for x in range(1, password_size + 1):
 
 print("\n[+] Password found :", password)
 
+
+
+SELECT CASE WHEN (1=1) THEN ‘A’ ELSE ‘B’ END;
+
+SELECT SLEEP(5);

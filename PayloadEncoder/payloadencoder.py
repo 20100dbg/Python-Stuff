@@ -31,15 +31,6 @@ def int_to_bytes(x):
 	return x.to_bytes(1, 'big')
 
 
-"""
-with open('shell', 'wb') as f:
-	for x in range(100):
-		y = x.to_bytes(1, 'big')
-		f.write(y)
-"""
-
-
-
 parser = argparse.ArgumentParser(description='Payload encoder')
 parser.add_argument('-i', '--input', metavar='INPUT', required=True, help='')
 parser.add_argument('-o', '--output', metavar='OUTPUT', help='')
