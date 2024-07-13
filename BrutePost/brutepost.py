@@ -61,8 +61,8 @@ parser = argparse.ArgumentParser(description='HTTP POST bruteforcer')
 parser.add_argument('-u', '--url', metavar='URL', required=True, help='URL to bruteforce')
 parser.add_argument('-L', '--logins', metavar='LOGIN WORDLIST', required=True, help='Login file')
 parser.add_argument('-P', '--passwords', metavar='PASSWORD WORDLIST', required=True, help='Passwords file')
-parser.add_argument('-x', '--headers', metavar='HEADER', action='append', help='Additionnal headers, format HEADER:VALUE')
-parser.add_argument('-c', '--cookies', metavar='COOKIES', action='append', help='Cookies. Standard format : NAME:VALUE')
+parser.add_argument('-x', '--headers', metavar='HEADER', action='append', help='Additionnal headers, format HEADER=VALUE')
+parser.add_argument('-c', '--cookies', metavar='COOKIES', action='append', help='Cookies, format : NAME=VALUE')
 parser.add_argument('-d', '--data', metavar='DATA', required=True, help='POST body to send. Standard format : var1=val1&var2=val2 Use ^USER^ and ^PASS^ as placeholders')
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('-s', '--success', metavar='MSG SUCCESS', help='Success string to look for')
@@ -75,13 +75,13 @@ CONF['failure'] = args.failure
 
 if args.cookies:
     for c in args.cookies:
-        idx = c.find(':')
+        idx = c.find('=')
         if idx > -1:
             CONF['cookies'][c[0:idx].strip()] = c[idx+1:].strip()
 
 if args.headers:
     for h in args.headers:
-        idx = h.find(':')
+        idx = h.find('=')
         if idx > -1:
             CONF['headers'][h[0:idx].strip()] = h[idx+1:].strip()
 

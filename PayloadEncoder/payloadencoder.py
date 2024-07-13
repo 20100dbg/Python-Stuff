@@ -1,6 +1,6 @@
-import sys
 import argparse
 import base64
+import sys
 
 def xor(buf, key):
 	buf2 = b''
@@ -32,12 +32,11 @@ def int_to_bytes(x):
 
 
 parser = argparse.ArgumentParser(description='Payload encoder')
-parser.add_argument('-i', '--input', metavar='INPUT', required=True, help='')
-parser.add_argument('-o', '--output', metavar='OUTPUT', help='')
-parser.add_argument('-f', '--format', metavar='FORMAT', help='b64, hex, raw')
-#group = parser.add_mutually_exclusive_group(required=True)
-parser.add_argument('-e', '--encrypt', metavar='ENCRYPT', required=False, help='xor')
-parser.add_argument('-p', '--password', metavar='PASSWORD', required=False, help='')
+parser.add_argument('-i', '--input', required=True, help='')
+parser.add_argument('-o', '--output', help='')
+parser.add_argument('-f', '--format', help='b64, hex, raw')
+parser.add_argument('-e', '--encrypt', help='xor')
+parser.add_argument('-p', '--password', help='')
 args = parser.parse_args()
 
 

