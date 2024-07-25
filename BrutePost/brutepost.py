@@ -73,33 +73,48 @@ def get_file_length(filename):
             nb += 1
     return nb
 
+
+def msg_usage(name=None):
+    return f'''
+Basic : 
+    {name} -c 18 -a 10 -n 1
+Specify performance settings : 
+    {name} -c 18 -a 10 -n 1 -p 10 -d 9.6 -s 128
+Repeater stuff :
+    {name} -c 18 -a 10 -n 1 -x client
+'''
+
+
 print()
 parser = argparse.ArgumentParser(description='HTTP POST bruteforcer')
-parser.add_argument('-u', '--url', required=True, help='URL to bruteforce')
-parser.add_argument('-L', '--logins', required=True, help='Login file')
-parser.add_argument('-P', '--passwords', required=True, help='Passwords file')
-parser.add_argument('-x', '--headers', action='append', help='Additionnal headers, format HEADER=VALUE')
-parser.add_argument('-c', '--cookies', action='append', help='Cookies, format : NAME=VALUE')
-parser.add_argument('-m', '--method', help='HTTP METHOD : GET / POST')
-parser.add_argument('-d', '--data', required=True, help='POST body to send. Standard format : var1=val1&var2=val2 Use ^USER^ and ^PASS^ as placeholders')
-parser.add_argument('-es', '--extract-start', help='Extract string starting from')
-parser.add_argument('-ee', '--extract-end', help='Extract string until')
-parser.add_argument('-ep', '--extract-print', help='Just print extracted string')
-parser.add_argument('-ec', '--extract-check', help='String must contains')
-parser.add_argument('-ei', '--extract-ignore', help='String must not contains')
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument('-s', '--success', help='Success string to look for')
-group.add_argument('-f', '--failure', help='Failure string to look for')
+
+group1 = parser.add_argument_group('Basic options')
+group1.add_argument('-u', '--url', metavar='', required=True, help='URL to bruteforce')
+group1.add_argument('-m', '--method', metavar='', default='POST', choices=['GET','POST'], help='HTTP METHOD')
+group1.add_argument('-L', '--logins', metavar='', required=True, help='Login file')
+group1.add_argument('-P', '--passwords', metavar='', required=True, help='Passwords file')
+
+group2 = parser.add_argument_group('Request parameters')
+group2.add_argument('-x', '--headers', metavar='', action='append', help='Additionnal headers, format HEADER=VALUE')
+group2.add_argument('-c', '--cookies', metavar='', action='append', help='Cookies, format : NAME=VALUE')
+group2.add_argument('-d', '--data', metavar='', required=True, help='POST body to send. Standard format : var1=val1&var2=val2 Use ^USER^ and ^PASS^ as placeholders')
+
+group3 = parser.add_argument_group('String extraction')
+group3.add_argument('-es', '--extract-start', metavar='', help='Extract string starting from')
+group3.add_argument('-ee', '--extract-end', metavar='', help='Extract string until')
+group3.add_argument('-ep', '--extract-print', metavar='', help='Just print extracted string')
+group3.add_argument('-ec', '--extract-check', metavar='', help='String must contains')
+group3.add_argument('-ei', '--extract-ignore', metavar='', help='String must not contains')
+
+group4 = parser.add_mutually_exclusive_group('Result detection', required=True)
+group4.add_argument('-s', '--success', metavar='', help='Success string to look for')
+group4.add_argument('-f', '--failure', metavar='', help='Failure string to look for')
 #args = parser.parse_args()
 args, leftovers = parser.parse_known_args()
 
 CONF['success'] = args.success
 CONF['failure'] = args.failure
-
-if args.method:
-    CONF['method'] = args.method.upper()
-else:
-    CONF['method'] = "GET"
+CONF['method'] = args.method.upper()
 
 if args.cookies:
     for c in args.cookies:

