@@ -55,14 +55,26 @@ Default : none
 Use various traversal methods
 Default : 0
 ```
---traversal_method 0 : ../
---traversal_method 1 : ..//
---traversal_method 2 : ....//
+--traversal-method 0 : ../
+--traversal-method 1 : ..//
+--traversal-method 2 : ....//
 
---traversal_method 999
+--traversal-method 999
 Path randomly generated : some payloads may just not work depending on HTTP servers, you should try a few times.
 ./..../.././///./././/..//..//././//../
 ```
+
+
+##### -ds / --dir-separator <method>
+Use various directory separators
+Default : 0
+```
+--dir-separator 0 : /
+--dir-separator 1 : \
+--dir-separator 2 : \\
+--dir-separator 3 : /./
+```
+
 
 ##### -x / --var <value>
 Replace `[VAR]` placeholder in a payload by your own value
