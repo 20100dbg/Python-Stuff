@@ -106,7 +106,8 @@ group3.add_argument('-ep', '--extract-print', metavar='', help='Just print extra
 group3.add_argument('-ec', '--extract-check', metavar='', help='String must contains')
 group3.add_argument('-ei', '--extract-ignore', metavar='', help='String must not contains')
 
-group4 = parser.add_mutually_exclusive_group('Result detection', required=True)
+group4_container = parser.add_argument_group('Result detection')
+group4 = group4_container.add_mutually_exclusive_group(required=True)
 group4.add_argument('-s', '--success', metavar='', help='Success string to look for')
 group4.add_argument('-f', '--failure', metavar='', help='Failure string to look for')
 #args = parser.parse_args()
