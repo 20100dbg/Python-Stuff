@@ -3,8 +3,14 @@ This is a collection of small python scripts I made.
 ## BinPatcher
 Ultra basic library to easily open, edit and save any file in binary mode.
 
+## bof
+Buffer overflow exploit tools
+
 ## BrutePost
 A simple but flexible HTTP POST bruteforcer.
+
+## GenUpload
+Web upload fuzzer 
 
 ## LFI Fuzzer
 A script to find and exploit LFI/RFI vulnerabilities with handy options.
@@ -20,3 +26,6 @@ Basic script to exploit an SQL injection.
 
 ## UserGen
 Username list generator, mainly aimed to Active Directory but can be used for anything.
+
+## Xortool
+Xor cypher solver
