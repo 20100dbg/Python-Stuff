@@ -1,4 +1,4 @@
-from BinPatcher import *
+from binpatcher import *
 
 bp = BinPatcher('file.zip')
 

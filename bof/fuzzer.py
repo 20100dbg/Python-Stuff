@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description='Binary fuzzer')
 group1 = parser.add_argument_group('Basics')
 group1.add_argument('-i', '--ip', metavar='', required=True, help='IP to fuzz')
 group1.add_argument('-p', '--port', metavar='', required=True, type=int, help='Port to fuzz')
-group1.add_argument('-m', '--mode', metavar='', required=True, choices=['fuzz', 'pattern', 'badchars'], help='Port to fuzz')
+group1.add_argument('-m', '--mode', metavar='', required=True, choices=['fuzz', 'pattern', 'badchars'], help='fuzz, pattern or badchars')
 
 group2 = parser.add_argument_group('Payload customization')
 group2.add_argument('-o', '--offset', metavar='', type=int, help='offset')
@@ -48,7 +48,7 @@ testchars = bytes([x for x in allchars if x not in badchars])
 
 s = connect(args.ip, args.port)
 
-if mode == "fuzz":
+if args.mode == "fuzz":
     while True:
         try:
 
@@ -60,7 +60,7 @@ if mode == "fuzz":
 
             s.recv(1024)
             nb_tries += 1
-            time.sleep(.1)
+            time.sleep(0.1)
 
             if args.reconnect:
                 s.close()
@@ -70,14 +70,14 @@ if mode == "fuzz":
             print(f"Crashed, fuzz = {len(fuzz)} bytes, total = {len(payload)} bytes")
             break
 
-elif mode == "badchars":
+elif args.mode == "badchars":
     payload = before + (fillchar * offset) + eip_placeholder + testchars + after
 
     #print(f"[+] sending {payload}")
     s.send(payload)
     s.recv(1024)
 
-elif mode == "pattern":
+elif args.mode == "pattern":
     payload = before + pattern + after
 
     #print(f"[+] sending {payload}")
