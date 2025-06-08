@@ -32,7 +32,7 @@ then
     escape=(" " "%20" "%00" "%0a")
 else
     #extphp=("php" "php3" "php4" "php" "php5" "phtml" "inc", "phar")
-    extphp=("php" "pHp5" "phtml")
+    extphp=("php" "pHp5" "phtml" "pht")
     escape=("?" "#" ";" "%20" "%00" "%0a" "%0d" "%0a0d" "%0a%0d")
 fi
 

