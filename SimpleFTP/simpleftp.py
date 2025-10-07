@@ -9,6 +9,24 @@ import threading
 import time
 from pathlib import Path
 
+#I = bin
+#A = ascii
+#E = EBCDIC
+
+#ajouter la création de client_data dans l'objet client
+
+class Client:
+    def __init__(self, socket, address):
+        self.socket = socket
+        self.socket_data = None
+        self.address = address
+        self.current_dir = ""
+        self.data_type = "A"
+        self.thread = None
+        self.auth = False
+        self.listening = True
+
+
 
 class SimpleFTP:
 
@@ -29,14 +47,14 @@ class SimpleFTP:
         self.print_debug(f"Root dir is {self.root_dir}")
         
         self.valid_creds = [login, password]
-        self.current_dir = ""
         self.current_creds = ["", ""]
-        self.data_type = "ascii"
+        self.auth = False
 
+        self.clients = []
         self.listener()
         
 
-    def start_data_listener(self, port):
+    def start_data_listener(self, port, client):
 
         self.print_debug(f"Starting FTP-DATA server on port {port}")
 
@@ -44,10 +62,10 @@ class SimpleFTP:
         server_data.bind(('0.0.0.0', port))
         server_data.listen(1)
 
-        self.client_data, client_address = server_data.accept()
+        client.socket_data, client_address = server_data.accept()
 
         while True:
-            if not self.client_data:
+            if not client.socket_data:
                 break
 
 
@@ -74,7 +92,7 @@ class SimpleFTP:
 
         if cmd == "USER":
             self.current_creds[0] = arg
-            client.send("331 Please specify password.\n".encode())
+            client.socket.send("331 Please specify password.\n".encode())
             self.print_debug("331 Please specify password.\n".encode())
         
         elif cmd == "PASS":
@@ -83,306 +101,363 @@ class SimpleFTP:
             if self.valid_creds == ["anonymous", "anonymous"] or \
                 (self.valid_creds[0] == self.current_creds[0] and \
                 self.valid_creds[1] == self.current_creds[1]):
-                client.send("230 Login successful.\n".encode())
+                client.socket.send("230 Login successful.\n".encode())
                 self.print_debug(f"Login successful for {self.current_creds[0]}")
+                self.auth = True
 
             else:
                 client.send("530 Login incorrect.\n".encode())
                 self.print_debug(f"Login incorrect for {self.current_creds[0]}")
+        
 
+        if cmd == "USER" or cmd == "PASS":
+            return None
 
-        elif cmd == "SYST":
-            client.send(f"215 {platform.system()}\n".encode())
+        elif cmd == "AUTH" or not self.auth:
+            client.socket.send("530 Please login with USER and PASS.\n".encode())
+            self.print_debug("530 Please login with USER and PASS.\n".encode())
+            return None
+
+        if cmd == "SYST":
+            client.socket.send(f"215 {platform.system()}\n".encode())
             self.print_debug(f"215 {platform.system()}\n".encode())
 
 
         elif cmd == "FEAT":
-            client.send("211-Features:\n".encode())
-            client.send(" EPSV\n".encode())
-            client.send(" PASV\n".encode())
-            client.send(" MDTM\n".encode())
-            client.send(" SIZE\n".encode())
-            client.send("211 End\n".encode())
+            client.socket.send("211-Features:\n".encode())
+            client.socket.send(" EPSV\n".encode())
+            client.socket.send(" PASV\n".encode())
+            client.socket.send(" MDTM\n".encode())
+            client.socket.send(" SIZE\n".encode())
+            client.socket.send("211 End\n".encode())
 
 
         elif cmd == "EPSV":
             passive_port = random.randint(10000,65000)
 
-            t = threading.Thread(target=self.start_data_listener,args=[passive_port])
+            t = threading.Thread(target=self.start_data_listener,args=[passive_port, client])
             t.start()
             time.sleep(0.1)
-            client.send(f"229 Entering Extended Passive Mode (|||{passive_port}|)\n".encode())
+            client.socket.send(f"229 Entering Extended Passive Mode (|||{passive_port}|)\n".encode())
             self.print_debug(f"229 Entering Extended Passive Mode (|||{passive_port}|)\n".encode())
 
 
         elif cmd == "PASV":
             passive_port = random.randint(10000,65000)
 
-            t = threading.Thread(target=self.start_data_listener,args=[passive_port])
+            t = threading.Thread(target=self.start_data_listener,args=[passive_port, client])
             t.start()
             time.sleep(0.1)
 
-            local_ip = client.getsockname()[0]
+            local_ip = client.socket.getsockname()[0]
             p2 = passive_port % 256
             p1 = passive_port // 256
 
-            client.send(f"227 Entering Passive Mode ({local_ip.replace('.', ',')},{p1},{p2})\n".encode())
+            client.socket.send(f"227 Entering Passive Mode ({local_ip.replace('.', ',')},{p1},{p2})\n".encode())
             self.print_debug(f"227 Entering Passive Mode ({local_ip.replace('.', ',')},{p1},{p2})\n".encode())
 
 
         elif cmd == "LIST":
 
-            client.send(f"150 Here comes the directory listing.\n".encode())
+            client.socket.send(f"150 Here comes the directory listing.\n".encode())
             self.print_debug(f"150 Here comes the directory listing.\n".encode())
 
             output = ""
-            current_path = os.path.join(self.root_dir, self.current_dir)
+            current_path = os.path.join(self.root_dir, client.current_dir)
+            self.print_debug(f"current_path {current_path}\n".encode())
 
-            for entry in os.scandir(current_path):
-                current_file = os.path.join(current_path, entry.name)
+            if os.path.isdir(current_path):
 
-                file_info = os.stat(current_file)
-                permissions = stat.filemode(file_info.st_mode)
+                for entry in os.scandir(current_path):
+                    current_file = os.path.join(current_path, entry.name)
 
-                last_modification = datetime.datetime.fromtimestamp(file_info.st_mtime)
-                last_modification = last_modification.strftime("%b %d %Y")
+                    file_info = os.stat(current_file)
+                    permissions = stat.filemode(file_info.st_mode)
 
-                output += f"{permissions}\t{file_info.st_nlink}\t{file_info.st_uid}\t{file_info.st_gid}\t{file_info.st_size}\t{last_modification}\t{entry.name}\r\n"
+                    last_modification = datetime.datetime.fromtimestamp(file_info.st_mtime)
+                    last_modification = last_modification.strftime("%b %d %Y")
 
-
-            if arg and "a" in arg and "l" in arg:
-                output = output.replace('\t', ' ' * 4)
+                    output += f"{permissions}\t{file_info.st_nlink}\t{file_info.st_uid}\t{file_info.st_gid}\t{file_info.st_size}\t{last_modification}\t{entry.name}\r\n"
 
 
-            self.client_data.send(output.encode())
-            self.client_data.close()
-            self.client_data = None
-            self.print_debug(f"{output.encode()}\n")
+                if arg and "a" in arg and "l" in arg:
+                    output = output.replace('\t', ' ' * 4)
 
-            client.send(f"226 Directory send OK.\n".encode())
-            self.print_debug(f"226 Directory send OK.\n".encode())
+
+                client.socket_data.send(output.encode())
+                client.socket_data.close()
+                client.socket_data = None
+                self.print_debug(f"{output.encode()}\n")
+
+                client.socket.send(f"226 Directory send OK.\n".encode())
+                self.print_debug(f"226 Directory send OK.\n".encode())
+
+            else:
+                client.socket.send("550 Directory read failed : not found.\n".encode())
+                self.print_debug("550 Directory read failed : not found.\n".encode())
+
 
         elif cmd == "NLST":
 
-            client.send(f"150 Here comes the directory listing.\n".encode())
+            client.socket.send(f"150 Here comes the directory listing.\n".encode())
             self.print_debug(f"150 Here comes the directory listing.\n".encode())
 
             output = ""
-            current_path = os.path.join(self.root_dir, self.current_dir)
+            current_path = os.path.join(self.root_dir, client.current_dir)
 
-            for entry in os.scandir(current_path):
-                output += f"{entry.name}\r\n"
+            if os.path.isdir(current_path):
 
-            self.client_data.send(output.encode())
-            self.client_data.close()
-            self.client_data = None
-            client.send(f"226 Directory send OK.\n".encode())
-            self.print_debug(f"226 Directory send OK.\n".encode())
+                for entry in os.scandir(current_path):
+                    output += f"{entry.name}\r\n"
 
-
-        elif cmd == "AUTH":
-            client.send("530 Please login with USER and PASS.\n".encode())
-            self.print_debug("530 Please login with USER and PASS.\n".encode())
+                client.socket_data.send(output.encode())
+                client.socket_data.close()
+                client.socket_data = None
+                client.socket.send(f"226 Directory send OK.\n".encode())
+                self.print_debug(f"226 Directory send OK.\n".encode())
+            
+            else:
+                client.socket.send("550 Directory read failed : not found.\n".encode())
+                self.print_debug("550 Directory read failed : not found.\n".encode())
 
 
         elif cmd == "PWD":
-            client.send(f'257 "/{self.current_dir}" is the current directory\n'.encode())
-            self.print_debug(f'257 "/{self.current_dir}" is the current directory\n'.encode())
+            client.socket.send(f'257 "/{client.current_dir}" is the current directory\n'.encode())
+            self.print_debug(f'257 "/{client.current_dir}" is the current directory\n'.encode())
 
 
         elif cmd == "CWD":
 
-            new_path, new_dir = self.get_new_path(arg)
+            new_path, new_dir = self.get_new_path(arg, client.current_dir)
             new_path = os.path.normpath(new_path)
             self.print_debug(f"new path : {new_path}")
 
             #Force to stay in FTP root dir
             if self.path_starts_with(self.root_dir, new_path):
-                self.current_dir = new_dir
+                client.current_dir = new_dir
 
-                client.send("250 Directory successfully changed.\n".encode())
+                client.socket.send("250 Directory successfully changed.\n".encode())
                 self.print_debug("250 Directory successfully changed.\n".encode())
             else:
-                client.send("550 Failed to change directory.\n".encode())
+                client.socket.send("550 Failed to change directory.\n".encode())
                 self.print_debug("550 Failed to change directory.\n".encode())
 
 
         elif cmd == "TYPE":
 
+            client.data_type = arg
+            
             if arg == "I":
-                self.data_type = "bin"
-                client.send("200 Switching to Binary mode.\n".encode())
+                client.socket.send("200 Switching to Binary mode.\n".encode())
                 self.print_debug("200 Switching to Binary mode.\n".encode())
             
             elif arg == "A":
-                self.data_type = "ascii"
-                client.send("200 Switching to ASCII mode.\n".encode())
+                client.socket.send("200 Switching to ASCII mode.\n".encode())
                 self.print_debug("200 Switching to ASCII mode.\n".encode())
-        
+            
+            elif arg == "E":
+                client.socket.send("200 Switching to EBCDIC mode.\n".encode())
+                self.print_debug("200 Switching to EBCDIC mode.\n".encode())
 
         elif cmd == "SIZE":
-            filepath, new_dir = self.get_new_path(arg)
+            filepath, new_dir = self.get_new_path(arg, client.current_dir)
 
-            client.send(f"212 {os.path.getsize(filepath)}\n".encode())
-            self.print_debug(f"212 {os.path.getsize(filepath)}\n".encode())
+            if os.path.isfile(filepath):
+                client.socket.send(f"212 {os.path.getsize(filepath)}\n".encode())
+                self.print_debug(f"212 {os.path.getsize(filepath)}\n".encode())
+
+            else:
+                client.socket.send(f"550 Failed to open file.\n".encode())
+                self.print_debug(f"550 Failed to open file.\n".encode())
 
 
         elif cmd == "MDTM":
-            filepath, new_dir = self.get_new_path(arg)
+            filepath, new_dir = self.get_new_path(arg, client.current_dir)
 
             file_info = os.stat(filepath)
             date_formated = datetime.datetime.fromtimestamp(file_info.st_mtime)
             date_formated = date_formated.strftime("%Y%m%d%H%M%S")
 
-            client.send(f"213 {date_formated}\n".encode())
+            client.socket.send(f"213 {date_formated}\n".encode())
             self.print_debug(f"213 {date_formated}\n".encode())
 
 
         elif cmd == "RETR":
 
-            filepath, new_dir = self.get_new_path(arg)
+            filepath, new_dir = self.get_new_path(arg, client.current_dir)
             filename = os.path.basename(filepath)
 
-            if self.path_starts_with(self.root_dir, filepath) and os.path.isfile(filepath):
+            if self.path_starts_with(self.root_dir, filepath):
 
-                filemode = 'r'
-                if self.data_type == "bin":
-                    filemode = 'rb'
+                if os.path.isfile(filepath):
 
-                client.send(f"150 Opening {self.data_type} mode data connection for {filename} ({os.path.getsize(filepath)} bytes).\n".encode())                
-                self.print_debug(f"150 Opening {self.data_type} mode data connection for {filename} ({os.path.getsize(filepath)} bytes).\n".encode())                
+                    filemode = 'r'
+                    if client.data_type == "I":
+                        filemode = 'rb'
 
-                with open(filepath, filemode) as f:
-                    self.client_data.send(f.read())
-                    self.client_data.close()
-                    self.client_data = None
-                    client.send("226 Transfer complete.\n".encode())
-                    self.print_debug("226 Transfer complete.\n".encode())
-                    
+                    client.socket.send(f"150 Opening {client.data_type} mode data connection for {filename} ({os.path.getsize(filepath)} bytes).\n".encode())
+                    self.print_debug(f"150 Opening {client.data_type} mode data connection for {filename} ({os.path.getsize(filepath)} bytes).\n".encode())
+
+                    with open(filepath, 'rb') as f:
+                        client.socket_data.send(f.read())
+                        client.socket_data.close()
+                        client.socket_data = None
+                        client.socket.send("226 Transfer complete.\n".encode())
+                        self.print_debug("226 Transfer complete.\n".encode())
+                        
+                else:
+                    client.socket.send(f"550 Failed to open file.\n".encode())
+                    self.print_debug(f"550 Failed to open file.\n".encode())
+
             else:
-                client.send("535 Failed security check. \n".encode())
+                client.socket.send("535 Failed security check. \n".encode())
                 self.print_debug("535 Failed security check. \n".encode())
 
 
         elif cmd == "STOR":
 
-            filepath, new_dir = self.get_new_path(arg)
+            filepath, new_dir = self.get_new_path(arg, client.current_dir)
             #filename = os.path.basename(filepath)
             #dirpath = os.path.dirname(fullpath)
 
             if self.path_starts_with(self.root_dir, filepath):
 
-                client.send("150 Ok to send data.\n".encode())
+                client.socket.send("150 Ok to send data.\n".encode())
                 self.print_debug("150 Ok to send data.\n".encode())
 
                 filemode = 'w'
-                if self.data_type == "bin":
+                if client.data_type == "I":
                     filemode = 'wb'
 
-                with open(filepath, filemode) as f:
+                with open(filepath, 'wb') as f:
                     while True:
-                        data = self.client_data.recv(1024)
+                        data = client.socket_data.recv(1024)
+
                         f.write(data)
                         if not data:
                             break
 
-                self.client_data.close()
-                self.client_data = None
+                client.socket_data.close()
+                client.socket_data = None
 
-                client.send("226 Transfer complete.\n".encode())
+                client.socket.send("226 Transfer complete.\n".encode())
                 self.print_debug("226 Transfer complete.\n".encode())
             else:
-                client.send("535 Failed security check. \n".encode())
+                client.socket.send("535 Failed security check. \n".encode())
                 self.print_debug("535 Failed security check. \n".encode())
 
 
         elif cmd == "QUIT":
-            client.send(f"221 Goodbye.\n".encode())
+            client.socket.send(f"221 Goodbye.\n".encode())
             self.print_debug(f"221 Goodbye.\n".encode())
-            client.close()
+            client.socket.close()
 
         elif cmd == "SITE":
             args = arg.split()
             self.print_debug(args)
 
-
             if args[0] == "CHMOD":
                 mode = args[1]
-                filepath, new_dir = self.get_new_path(args[2])
+                filepath, new_dir = self.get_new_path(args[2], client.current_dir)
                 #self.print_debug(f"filepath {filepath}")
                 #os.chmod(filepath, 0o644)
 
-                client.send(f"200 SITE CHMOD command ok.\n".encode())
+                client.socket.send(f"200 SITE CHMOD command ok.\n".encode())
                 self.print_debug(f"200 SITE CHMOD command ok.\n".encode())
 
         else:
-            client.send(f"502 Command not implemented.\n".encode())
+            client.socket.send(f"502 Command not implemented.\n".encode())
             self.print_debug(f"502 Command not implemented.\n".encode())
 
 
 
     def listener(self):
-
         listening = True
 
         while listening:
-            client, client_address = self.server.accept()
-
-            self.current_dir = ""
-            self.current_creds = ["", ""]
-            self.data_type = "ascii"
 
             try:
-                print(f"Connected to client: {client_address}")
-                
-                client.send("220 SimpleFTP 0.1\n".encode())
-                self.print_debug("220 SimpleFTP 0.1\n".encode())
+                client, client_address = self.server.accept()
+                self.create_update_client(client, client_address)
 
-                while listening:
-
-                    try:
-                        data = client.recv(1024)
-                    except KeyboardInterrupt as e:
-                        self.print_debug("KeyboardInterrupt")
-                        data = None
-                        listening = False
-                    
-                    if data:
-                        data = data.decode('utf-8').strip()
-                        self.handle(client, data)
-
-                        if data == "QUIT":
-                            break
-
-            except Exception as e:
-                print(f"Exception : {e}")
-            finally:
-                client.close()
-                self.print_debug("Close client")
+            except KeyboardInterrupt as e:
+                self.print_debug("KeyboardInterrupt")
+                listening = False
 
         self.print_debug("Close server")
         self.server.close()
 
 
+    def create_update_client(self, s, address):
+        
+        idx = -1
+        for i in range(len(self.clients)):
+            if self.clients[i].address[0] == address[0]:
+                idx = i
+
+        if idx == -1:
+            c = Client(s, address)
+            self.clients.append(c)
+            idx = len(self.clients) - 1
+            self.print_debug(f"Connected to client: {address}")
+        
+        else:
+            self.print_debug(f"Re-Connected to client: {address}")
+
+            self.clients[idx].socket.shutdown(socket.SHUT_WR)
+            time.sleep(0.1)
+            self.clients[idx].socket.close()
+            time.sleep(0.1)
+            self.clients[idx].thread.join()
+            
+            self.clients[idx].address = address
+            self.clients[idx].socket = s
+
+        self.print_debug(f"Welcome message !")
+        
+        self.clients[idx].thread = threading.Thread(target=self.client_handler,args=[self.clients[idx]])
+        self.clients[idx].thread.start()
+        time.sleep(0.1)
+        self.clients[idx].socket.send("220 SimpleFTP 0.1\n".encode())
+        self.print_debug("220 SimpleFTP 0.1\n".encode())
+
+
+
+
+    def client_handler(self, client):
+
+        while True:
+
+            try:
+                data = client.socket.recv(1024)
+
+            except Exception as e:
+                #print(f"Exception : {e}")
+                self.print_debug("Close client")
+                break
+
+            if data:
+                data = data.decode('utf-8').strip()
+                self.handle(client, data)
+
+                if data == "QUIT":
+                    break
+
+
+
     def path_starts_with(self, parent_path, child_path):
+        return True
         return child_path[:len(parent_path)] == parent_path
 
 
-    def print_path(self, path):
-        if len(path) > 1 and path[-1] == "/":
-            return path[:-1]
+    def get_new_path(self, path, current_dir):
+        if path[0] == "/":
+            path = path[1:]
+            new_path = os.path.join(self.root_dir, path)
+            new_dir = path
         else:
-            return path
-
-
-    def get_new_path(self, arg):
-        if arg[0] == "/":
-            arg = arg[1:]
-            new_path = os.path.join(self.root_dir, arg)
-            new_dir = arg
-        else:
-            new_path = os.path.join(self.root_dir, self.current_dir, arg)
-            new_dir = os.path.join(self.current_dir, arg)
+            new_path = os.path.join(self.root_dir, current_dir, path)
+            new_dir = os.path.join(current_dir, path)
 
         return new_path, new_dir
 
