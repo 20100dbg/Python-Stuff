@@ -2,7 +2,13 @@
 
 Really simple FTP server, without installing a service or complex configuration.
 
-#### Features
+
+Now in two flavour :
+- full-server.py : more features, supports more clients
+- minimal-server.py : only basic features, supports only tnftp (your ftp command)
+
+
+#### Basic Features
 
 - Upload / download files
 - Basic navigation
@@ -10,7 +16,12 @@ Really simple FTP server, without installing a service or complex configuration.
 - Logins or anonymous mode
 - Path safety checks
 
-Tested with tnftp client.
+
+#### Full Features
+
+- Tested against tnftp, gFtp, Filezilla
+- PASV and EPSV modes
+- Multiple clients at once (not tested but I feel lucky)
 
 
 #### Basic options

@@ -13,12 +13,14 @@ from pathlib import Path
 #A = ascii
 #E = EBCDIC
 
-#ajouter la création de client_data dans l'objet client
+#add .set() to tell when socket_data is ready, instead of .sleep()
+
 
 class Client:
     def __init__(self, socket, address):
         self.socket = socket
         self.socket_data = None
+        #self.socket_data_ready = threading.Event()
         self.address = address
         self.current_dir = ""
         self.data_type = "A"
@@ -48,7 +50,6 @@ class SimpleFTP:
         
         self.valid_creds = [login, password]
         self.current_creds = ["", ""]
-        self.auth = False
 
         self.clients = []
         self.listener()
@@ -68,6 +69,7 @@ class SimpleFTP:
             if not client.socket_data:
                 break
 
+        self.print_debug(f"client.socket_data is None !")
 
     def print_debug(self, txt):
         if self.debug:
@@ -137,7 +139,7 @@ class SimpleFTP:
 
             t = threading.Thread(target=self.start_data_listener,args=[passive_port, client])
             t.start()
-            time.sleep(0.1)
+            time.sleep(0.2)
             client.socket.send(f"229 Entering Extended Passive Mode (|||{passive_port}|)\n".encode())
             self.print_debug(f"229 Entering Extended Passive Mode (|||{passive_port}|)\n".encode())
 
@@ -147,7 +149,7 @@ class SimpleFTP:
 
             t = threading.Thread(target=self.start_data_listener,args=[passive_port, client])
             t.start()
-            time.sleep(0.1)
+            time.sleep(0.2)
 
             local_ip = client.socket.getsockname()[0]
             p2 = passive_port % 256
@@ -291,10 +293,6 @@ class SimpleFTP:
 
                 if os.path.isfile(filepath):
 
-                    filemode = 'r'
-                    if client.data_type == "I":
-                        filemode = 'rb'
-
                     client.socket.send(f"150 Opening {client.data_type} mode data connection for {filename} ({os.path.getsize(filepath)} bytes).\n".encode())
                     self.print_debug(f"150 Opening {client.data_type} mode data connection for {filename} ({os.path.getsize(filepath)} bytes).\n".encode())
 
@@ -324,10 +322,6 @@ class SimpleFTP:
 
                 client.socket.send("150 Ok to send data.\n".encode())
                 self.print_debug("150 Ok to send data.\n".encode())
-
-                filemode = 'w'
-                if client.data_type == "I":
-                    filemode = 'wb'
 
                 with open(filepath, 'wb') as f:
                     while True:
@@ -417,7 +411,7 @@ class SimpleFTP:
         
         self.clients[idx].thread = threading.Thread(target=self.client_handler,args=[self.clients[idx]])
         self.clients[idx].thread.start()
-        time.sleep(0.1)
+
         self.clients[idx].socket.send("220 SimpleFTP 0.1\n".encode())
         self.print_debug("220 SimpleFTP 0.1\n".encode())
 
